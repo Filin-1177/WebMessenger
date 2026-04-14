@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UltraHash — хеширование через URL</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #0a0f1e 0%, #0c1222 100%);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .card {
+            background: rgba(18, 25, 45, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 2rem;
+            padding: 2rem;
+            max-width: 900px;
+            width: 100%;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.4), 0 0 0 1px rgba(88, 130, 255, 0.15);
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.2s ease;
+        }
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 0.25rem;
+            background: linear-gradient(135deg, #c0e0ff, #8ab3ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: -0.3px;
+        }
+        .sub {
+            color: #8e9bbe;
+            margin-bottom: 2rem;
+            border-left: 3px solid #3b6eff;
+            padding-left: 1rem;
+            font-size: 0.9rem;
+        }
+        .result-box {
+            background: #0b0f1a;
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border: 1px solid #1e2a44;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.4), 0 2px 3px rgba(0,0,0,0.2);
+        }
+        .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 600;
+            color: #5f7fbf;
+            margin-bottom: 0.5rem;
+        }
+        .value {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 1rem;
+            word-break: break-all;
+            white-space: pre-wrap;
+            color: #e3f2ff;
+            background: #00000030;
+            padding: 0.75rem;
+            border-radius: 1rem;
+            border-left: 3px solid #3b6eff;
+        }
+        .hash {
+            font-family: monospace;
+            font-size: 1.1rem;
+            background: #00000060;
+            padding: 1rem;
+            border-radius: 1rem;
+            letter-spacing: 0.3px;
+        }
+        .badge {
+            display: inline-block;
+            background: #1e2b4e;
+            padding: 0.2rem 0.7rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #bdd4ff;
+        }
+        .info {
+            background: #0e1424;
+            border-radius: 1.2rem;
+            padding: 1rem;
+            font-size: 0.8rem;
+            color: #98a9d9;
+            margin-top: 1.5rem;
+        }
+        code {
+            background: #00000050;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #ffd966;
+        }
+        .footer {
+            margin-top: 1rem;
+            font-size: 0.7rem;
+            text-align: center;
+            color: #4a5a82;
+        }
+        a {
+            color: #8aaeff;
+            text-decoration: none;
+        }
+        hr {
+            border-color: #1f2b44;
+            margin: 1rem 0;
+        }
+        button {
+            background: #1f2b44;
+            border: none;
+            color: white;
+            font-family: monospace;
+            padding: 0.3rem 0.8rem;
+            border-radius: 1rem;
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: 0.1s;
+        }
+        button:hover {
+            background: #2f3f64;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>⚡ UltraHash</h1>
+    <div class="sub">хеширование через URL · GitHub Pages native</div>
+
+    <div id="content" class="result-box">
+        <div style="text-align: center; color: #8e9bbe;">🔍 загрузка параметров...</div>
+    </div>
+
+    <div class="info">
+        📌 <strong>Как использовать:</strong><br>
+        <code>?string=текст&algo=sha256</code><br>
+        <code>?string=hello&algo=sha1</code><br>
+        <code>?string=hello&algo=md5</code><br>
+        <span style="font-size:0.75rem;">✅ Поддерживаются: <strong>sha256, sha1, md5</strong></span>
+    </div>
+    <div class="footer">
+        🔗 работает полностью локально · crypto.subtle + CryptoJS · хеш вычисляется в браузере
+    </div>
+</div>
+
+<!-- подключаем CryptoJS для MD5 и SHA1/SHA256 (webcrypto + fallback) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+
+<script>
+    (async function() {
+        // ---- вспомогательные функции (webcrypto для sha256/sha1) ----
+        async function sha256WebCrypto(str) {
+            const enc = new TextEncoder();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(str));
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function sha1WebCrypto(str) {
+            const enc = new TextEncoder();
+            const hashBuffer = await crypto.subtle.digest('SHA-1', enc.encode(str));
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function md5CryptoJS(str) {
+            return CryptoJS.MD5(str).toString();
+        }
+
+        function sha256CryptoJS(str) {
+            return CryptoJS.SHA256(str).toString();
+        }
+
+        function sha1CryptoJS(str) {
+            return CryptoJS.SHA1(str).toString();
+        }
+
+        // ---- главная логика ----
+        function getParams() {
+            const params = new URLSearchParams(window.location.search);
+            let string = params.get('string');
+            let algo = params.get('algo');
+            if (!string) string = null;
+            if (!algo) algo = 'sha256';
+            return { string, algo: algo.toLowerCase() };
+        }
+
+        async function computeHash(string, algo) {
+            if (!string) return null;
+            // приоритет: webcrypto для sha256 и sha1 (быстрее, нативно)
+            if (algo === 'sha256') {
+                if (window.crypto && window.crypto.subtle) {
+                    return await sha256WebCrypto(string);
+                } else {
+                    return sha256CryptoJS(string);
+                }
+            } else if (algo === 'sha1') {
+                if (window.crypto && window.crypto.subtle) {
+                    return await sha1WebCrypto(string);
+                } else {
+                    return sha1CryptoJS(string);
+                }
+            } else if (algo === 'md5') {
+                return md5CryptoJS(string);
+            } else {
+                return null; // неподдерживаемый алгоритм
+            }
+        }
+
+        function renderResult(string, algo, hash, error = null) {
+            const container = document.getElementById('content');
+            if (error) {
+                container.innerHTML = `
+                    <div class="label">⚠️ ОШИБКА</div>
+                    <div class="value">${escapeHtml(error)}</div>
+                `;
+                return;
+            }
+            if (!string) {
+                container.innerHTML = `
+                    <div class="label">📭 НЕТ СТРОКИ</div>
+                    <div class="value">Укажите параметр <code>?string=...</code> в URL.<br>
+                    ➕ пример: <code>?string=19876543210&algo=sha256</code></div>
+                `;
+                return;
+            }
+            if (!hash) {
+                container.innerHTML = `
+                    <div class="label">⚠️ НЕИЗВЕСТНЫЙ АЛГОРИТМ</div>
+                    <div class="value">Алгоритм "${escapeHtml(algo)}" не поддерживается.<br>
+                    Доступны: <strong>sha256, sha1, md5</strong></div>
+                `;
+                return;
+            }
+
+            // красивый вывод
+            container.innerHTML = `
+                <div class="label">🔤 СТРОКА (${string.length} симв.)</div>
+                <div class="value">${escapeHtml(string)}</div>
+                <div style="margin-top: 1.2rem;"></div>
+                <div class="label">⚙️ АЛГОРИТМ</div>
+                <div class="value"><span class="badge">${escapeHtml(algo.toUpperCase())}</span></div>
+                <div style="margin-top: 1.2rem;"></div>
+                <div class="label">🔐 ХЕШ (HEX)</div>
+                <div class="hash" style="font-family: monospace; word-break: break-all;">${escapeHtml(hash)}</div>
+                <div style="margin-top: 0.8rem; text-align: right;">
+                    <button id="copyBtn" style="background:#2a3a60;">📋 Копировать хеш</button>
+                </div>
+            `;
+            const copyBtn = document.getElementById('copyBtn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(hash).then(() => {
+                        copyBtn.innerText = '✅ Скопировано!';
+                        setTimeout(() => copyBtn.innerText = '📋 Копировать хеш', 1500);
+                    }).catch(() => alert('Не удалось скопировать'));
+                });
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
+        }
+
+        // ---- точка входа ----
+        try {
+            const { string, algo } = getParams();
+            if (!string) {
+                renderResult(null, algo, null);
+                return;
+            }
+            // показываем лоадер
+            document.getElementById('content').innerHTML = `<div class="label">⏳ ВЫЧИСЛЕНИЕ ХЕША</div><div class="value">алгоритм: ${algo} ...</div>`;
+            const hash = await computeHash(string, algo);
+            if (hash === null) {
+                renderResult(string, algo, null, `Алгоритм "${algo}" не поддерживается. Используйте sha256, sha1, md5`);
+            } else {
+                renderResult(string, algo, hash);
+            }
+        } catch (err) {
+            console.error(err);
+            document.getElementById('content').innerHTML = `<div class="label">💥 ОШИБКА ВЫПОЛНЕНИЯ</div><div class="value">${escapeHtml(err.message)}</div>`;
+        }
+    })();
+</script>
+</body>
+</html>
